@@ -1,3 +1,10 @@
+const express = require('express');
+const port = 1998;
+const app = express();
+app.listen(pory, () => {
+  console.log('server started on port ${port}')');
+});
+
 const TelegramBot = require("node-telegram-bot-api");
 const ytdl = require("ytdl-core");
 const fs = require("fs");
