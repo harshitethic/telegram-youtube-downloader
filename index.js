@@ -1,105 +1,130 @@
 const express = require('express');
-const port = 3948;
+const TelegramBot = require('node-telegram-bot-api');
+const ytdl = require('ytdl-core');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+require('dotenv').config();
+
+const port = Number(process.env.PORT) || 3948;
+const token = process.env.TELEGRAM_BOT_TOKEN || process.env.B;
+
+if (!token) {
+  throw new Error('Missing TELEGRAM_BOT_TOKEN environment variable.');
+}
 
 const app = express();
-
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.listen(port, () => {
   console.log(`Server started on port ${port}`);
 });
 
-const TelegramBot = require("node-telegram-bot-api");
-const ytdl = require("ytdl-core");
-const fs = require("fs");
-
-require("dotenv").config();
-
-// Replace YOUR_BOT_TOKEN with your actual bot token
-const token = process.env.B;
-
-// Create a bot instance
 const bot = new TelegramBot(token, { polling: true });
+const downloads = new Map();
 
-// Function to download a YouTube video and send it as a video file
-async function downloadVideo(chatId, url) {
+const safeTitle = (title) =>
+  title.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 80) || 'video';
+
+const downloadVideo = async (chatId, url) => {
+  let tempPath;
+  let updateInterval;
+
   try {
-    // Get video information and thumbnail URL
     const videoInfo = await ytdl.getInfo(url);
-    const title = videoInfo.player_response.videoDetails.title;
-    const thumbnailUrl =
-      videoInfo.videoDetails.thumbnails[
-        videoInfo.videoDetails.thumbnails.length - 1
-      ].url;
-    // Send a message to show the download progress
-    const message = await bot.sendMessage(
+    const details = videoInfo.videoDetails;
+    const title = details.title || 'video';
+    const fileName = `${safeTitle(title)}-${crypto.randomUUID()}.mp4`;
+    tempPath = path.join(__dirname, fileName);
+
+    const progressMessage = await bot.sendMessage(
       chatId,
-      `*Downloading video:* ${title}`
+      `*Downloading video:* ${title}`,
+      { parse_mode: 'Markdown' }
     );
 
-    // Create a writable stream to store the video file
-    const writeStream = fs.createWriteStream(`${title}-${chatId}.mp4`);
+    const downloadStream = ytdl(url, {
+      filter: 'audioandvideo',
+      quality: 'highest',
+    });
+    const writeStream = fs.createWriteStream(tempPath);
 
-    // Start the download and pipe the video data to the writable stream
-    ytdl(url, { filter: "audioandvideo" }).pipe(writeStream);
+    downloads.set(chatId, { tempPath, stream: downloadStream });
 
-    // Set up an interval to update the message with the download progress every 5 seconds
-    let progress = 0;
-    const updateInterval = setInterval(() => {
-      progress = writeStream.bytesWritten / (1024 * 1024);
+    updateInterval = setInterval(() => {
+      const progress = writeStream.bytesWritten / (1024 * 1024);
       bot.editMessageText(
-        `*Downloading video:* ${title} (${progress.toFixed(2)} MB) \u{1F4E6}`,
+        `*Downloading video:* ${title} (${progress.toFixed(2)} MB) 📦`,
         {
           chat_id: chatId,
-          message_id: message.message_id,
-          parse_mode: "Markdown", // use Markdown formatting
+          message_id: progressMessage.message_id,
+          parse_mode: 'Markdown',
         }
-      );
+      ).catch((error) => console.error('Progress update failed:', error.message));
     }, 2000);
 
-    // When the download is complete, send the video and delete the file
-    writeStream.on("finish", () => {
-      clearInterval(updateInterval); // stop updating the message
-      bot
-        .sendVideo(chatId, `${title}-${chatId}.mp4`, {
-          caption: `*Video downloaded:* ${title} "by" @TsuyuOfficial 🏯`,
-          thumb: thumbnailUrl,
-          duration: videoInfo.videoDetails.lengthSeconds,
-          parse_mode: "Markdown",
-        })
+    await new Promise((resolve, reject) => {
+      downloadStream.on('error', reject);
+      writeStream.on('error', reject);
+      writeStream.on('finish', resolve);
+      downloadStream.pipe(writeStream);
+    });
 
-        .then(() => {
-          fs.unlinkSync(`${title}-${chatId}.mp4`); // delete the file
-        })
-        .catch((error) => {
-          bot.sendMessage(chatId, "Error sending video.");
-          console.error(error);
-        });
+    clearInterval(updateInterval);
+    updateInterval = undefined;
+
+    await bot.sendVideo(chatId, tempPath, {
+      caption: `*Video downloaded:* ${title}`,
+      duration: Number(details.lengthSeconds) || undefined,
+      parse_mode: 'Markdown',
     });
   } catch (error) {
-    bot.sendMessage(chatId, "Error downloading video.");
-    console.error(error);
-  }
-}
+    console.error('Download failed:', error);
+    await bot.sendMessage(chatId, '❌ Error downloading that video. Please try again later.');
+  } finally {
+    if (updateInterval) clearInterval(updateInterval);
+    downloads.delete(chatId);
 
-// Listen for the /yt command
-bot.onText(/\/yt/, (msg) => {
+    if (tempPath) {
+      await fs.promises.unlink(tempPath).catch(() => {});
+    }
+  }
+};
+
+bot.onText(/^\/yt(?:@\w+)?(?:\s+(.+))?$/i, async (msg, match) => {
   const chatId = msg.chat.id;
-  const url = msg.text.split(" ")[1];
+  const url = match && match[1] ? match[1].trim() : '';
 
-  if (ytdl.validateURL(url)) {
-    downloadVideo(chatId, url);
-  } else {
-    bot.sendMessage(chatId, "Invalid YouTube URL.");
+  if (!url || !ytdl.validateURL(url)) {
+    await bot.sendMessage(chatId, '❌ Invalid YouTube URL. Usage: /yt <youtube link>');
+    return;
   }
+
+  if (downloads.has(chatId)) {
+    await bot.sendMessage(chatId, '⏳ You already have a download in progress.');
+    return;
+  }
+
+  await downloadVideo(chatId, url);
 });
 
-bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
-
-  // Send a message with the introduction and instructions
+bot.onText(/^\/start(?:@\w+)?$/i, (msg) => {
   bot.sendMessage(
-    chatId,
-    `Hey, I am TsuyuDL made by @TsuyuOfficial. Use the following commands to use me! 
-
-/yt - Give any youtube link and TsuyuDL will download it for you.`
+    msg.chat.id,
+    'Hey! I am TsuyuDL. Send /yt followed by a YouTube link and I will download the video for you.'
   );
+});
+
+bot.onText(/^\/help(?:@\w+)?$/i, (msg) => {
+  bot.sendMessage(
+    msg.chat.id,
+    'Commands:\n/start - Show instructions\n/help - Show this help\n/yt <youtube link> - Download a YouTube video'
+  );
+});
+
+bot.on('polling_error', (error) => {
+  console.error('Telegram polling error:', error.message);
+});
+
+process.on('unhandledRejection', (error) => {
+  console.error('Unhandled promise rejection:', error);
 });
