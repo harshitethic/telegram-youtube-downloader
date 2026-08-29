@@ -28,6 +28,7 @@ const safeTitle = (title) =>
 const downloadVideo = async (chatId, url) => {
   let tempPath;
   let updateInterval;
+  let cancelled = false;
 
   try {
     const videoInfo = await ytdl.getInfo(url);
@@ -48,7 +49,14 @@ const downloadVideo = async (chatId, url) => {
     });
     const writeStream = fs.createWriteStream(tempPath);
 
-    downloads.set(chatId, { tempPath, stream: downloadStream });
+    downloads.set(chatId, {
+      tempPath,
+      stream: downloadStream,
+      cancel: () => {
+        cancelled = true;
+        downloadStream.destroy(new Error('Download cancelled by user.'));
+      },
+    });
 
     updateInterval = setInterval(() => {
       const progress = writeStream.bytesWritten / (1024 * 1024);
@@ -78,8 +86,13 @@ const downloadVideo = async (chatId, url) => {
       parse_mode: 'Markdown',
     });
   } catch (error) {
-    console.error('Download failed:', error);
-    await bot.sendMessage(chatId, '❌ Error downloading that video. Please try again later.');
+    console.error('Download failed:', error.message);
+
+    if (cancelled) {
+      await bot.sendMessage(chatId, '🛑 Download cancelled.');
+    } else {
+      await bot.sendMessage(chatId, '❌ Error downloading that video. Please try again later.');
+    }
   } finally {
     if (updateInterval) clearInterval(updateInterval);
     downloads.delete(chatId);
@@ -100,24 +113,37 @@ bot.onText(/^\/yt(?:@\w+)?(?:\s+(.+))?$/i, async (msg, match) => {
   }
 
   if (downloads.has(chatId)) {
-    await bot.sendMessage(chatId, '⏳ You already have a download in progress.');
+    await bot.sendMessage(chatId, '⏳ You already have a download in progress. Use /cancel to stop it.');
     return;
   }
 
   await downloadVideo(chatId, url);
 });
 
+bot.onText(/^\/cancel(?:@\w+)?$/i, async (msg) => {
+  const chatId = msg.chat.id;
+  const activeDownload = downloads.get(chatId);
+
+  if (!activeDownload) {
+    await bot.sendMessage(chatId, 'ℹ️ You do not have an active download.');
+    return;
+  }
+
+  activeDownload.cancel();
+  await bot.sendMessage(chatId, '🛑 Cancelling your download...');
+});
+
 bot.onText(/^\/start(?:@\w+)?$/i, (msg) => {
   bot.sendMessage(
     msg.chat.id,
-    'Hey! I am TsuyuDL. Send /yt followed by a YouTube link and I will download the video for you.'
+    'Hey! I am TsuyuDL. Send /yt followed by a YouTube link and I will download the video for you.\n\nUse /cancel to stop an active download.'
   );
 });
 
 bot.onText(/^\/help(?:@\w+)?$/i, (msg) => {
   bot.sendMessage(
     msg.chat.id,
-    'Commands:\n/start - Show instructions\n/help - Show this help\n/yt <youtube link> - Download a YouTube video'
+    'Commands:\n/start - Show instructions\n/help - Show this help\n/yt <youtube link> - Download a YouTube video\n/cancel - Cancel your active download'
   );
 });
 
