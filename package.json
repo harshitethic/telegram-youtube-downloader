@@ -1,11 +1,15 @@
 {
   "name": "telegram-youtube-downloader",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Telegram bot for downloading YouTube videos",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "check": "node --check index.js"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "keywords": [
     "telegram",
@@ -13,14 +17,15 @@
     "video",
     "downloader",
     "nodejs",
-    "bot"
+    "bot",
+    "youtubei"
   ],
-  "author": "Abhishek Chamoli",
-  "license": "ISC",
+  "author": "Harshit Sharma, Harshitethic",
+  "license": "MIT",
   "dependencies": {
-    "dotenv": "^16.0.3",
-    "express": "^4.18.2",
-    "node-telegram-bot-api": "^0.60.0",
-    "ytdl-core": "^4.11.2"
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "node-telegram-bot-api": "^0.66.0",
+    "youtubei.js": "^18.0.0"
   }
 }
