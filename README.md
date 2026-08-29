@@ -7,6 +7,7 @@ A lightweight Telegram bot built with Node.js that downloads YouTube videos and 
 ## ✨ Features
 
 - 🎬 Download YouTube videos with `/yt <youtube link>`
+- 🛑 Cancel an active download with `/cancel`
 - 📦 Sends the downloaded video directly to Telegram
 - 📊 Shows download progress in the chat
 - 🧹 Automatically removes temporary files after sending
@@ -84,11 +85,18 @@ The default health server runs on port `3948`. Change it with `PORT` when deploy
 | `/start` | Show bot instructions |
 | `/help` | Show available commands |
 | `/yt <youtube link>` | Download a YouTube video |
+| `/cancel` | Cancel your active download |
 
 ### Example
 
 ```text
 /yt https://www.youtube.com/watch?v=dQw4w9WgXcQ
+```
+
+To stop the current download:
+
+```text
+/cancel
 ```
 
 ## 🔧 Configuration
@@ -132,6 +140,7 @@ npm run check
 - [x] URL validation
 - [x] Download progress updates
 - [x] Temporary-file cleanup
+- [x] Download cancellation with `/cancel`
 - [x] Error handling for download/write streams
 - [x] Health endpoint
 - [ ] Add automated tests
@@ -148,7 +157,6 @@ npm run check
 
 ### v2.1 — User Experience
 
-- [ ] Cancel an active download with `/cancel`
 - [ ] Queue downloads instead of rejecting concurrent requests
 - [ ] Progress percentage and estimated remaining time
 - [ ] Cleaner video metadata and thumbnails
