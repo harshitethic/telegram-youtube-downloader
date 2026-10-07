@@ -154,7 +154,7 @@ CI runs the same check automatically on pushes and pull requests.
 ## ⚠️ Limitations
 
 - YouTube can change its internal API, and no unofficial downloader can guarantee permanent compatibility.
-- Server IP reputation, regional restrictions, authentication requirements, and YouTube changes can still cause individual videos to fail. `youtubei.js` documents server-IP blocking as a possible cause of failed video-info requests. citeturn216823search5
+- Server IP reputation, regional restrictions, authentication requirements, and YouTube changes can still cause individual videos to fail.
 - Telegram and the configured `MAX_FILE_SIZE_MB` limit can prevent very large videos from being sent.
 
 ## 🤝 Contributing
