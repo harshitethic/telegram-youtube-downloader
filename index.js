@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import 'dotenv/config';
+import { createByteLimiter } from './lib/byte-limit.js';
 
 const PORT = Number(process.env.PORT) || 3948;
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.B;
@@ -115,7 +116,7 @@ async function downloadVideo(chatId, input) {
       });
     }, 3000);
 
-    await pipeline(nodeStream, fs.createWriteStream(tempPath));
+    await pipeline(nodeStream, createByteLimiter(MAX_FILE_SIZE_MB * 1024 * 1024), fs.createWriteStream(tempPath));
 
     const stats = await fs.promises.stat(tempPath);
     if (stats.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
