@@ -7,10 +7,11 @@ import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import 'dotenv/config';
+import { readBoundedInteger } from './lib/config.js';
 
-const PORT = Number(process.env.PORT) || 3948;
+const PORT = readBoundedInteger(process.env.PORT, { name: 'PORT', fallback: 3948, min: 1, max: 65535 });
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.B;
-const MAX_FILE_SIZE_MB = Number(process.env.MAX_FILE_SIZE_MB) || 49;
+const MAX_FILE_SIZE_MB = readBoundedInteger(process.env.MAX_FILE_SIZE_MB, { name: 'MAX_FILE_SIZE_MB', fallback: 49, min: 1, max: 2048 });
 const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || path.join(process.env.TMPDIR || process.cwd(), 'downloads');
 
 if (!TOKEN) throw new Error('Missing TELEGRAM_BOT_TOKEN environment variable.');
