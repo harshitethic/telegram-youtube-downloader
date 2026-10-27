@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import 'dotenv/config';
+import { startingMessage, progressMessage } from './lib/messages.js';
 
 const PORT = Number(process.env.PORT) || 3948;
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.B;
@@ -57,18 +58,6 @@ function safeTitle(title) {
     .slice(0, 80) || 'video';
 }
 
-function formatBytes(bytes) {
-  if (!Number.isFinite(bytes)) return 'unknown size';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
-}
-
 async function downloadVideo(chatId, input) {
   let tempPath;
   let progressInterval;
@@ -85,7 +74,7 @@ async function downloadVideo(chatId, input) {
     const duration = Number(info.basic_info?.duration || 0);
     tempPath = path.join(DOWNLOAD_DIR, `${safeTitle(title)}-${crypto.randomUUID()}.mp4`);
 
-    const progressMessage = await bot.sendMessage(chatId, `🎬 *${title}*\nStarting download…`, { parse_mode: 'Markdown' });
+    const progressNotification = await bot.sendMessage(chatId, startingMessage(title));
 
     const webStream = await yt.download(videoId, {
       type: 'video+audio',
@@ -109,8 +98,8 @@ async function downloadVideo(chatId, input) {
         const elapsed = Math.max((Date.now() - startedAt) / 1000, 1);
         const rate = stats.size / elapsed;
         bot.editMessageText(
-          `🎬 *${title}*\n📦 ${formatBytes(stats.size)} downloaded\n⚡ ${formatBytes(rate)}/s`,
-          { chat_id: chatId, message_id: progressMessage.message_id, parse_mode: 'Markdown' }
+          progressMessage(title, stats.size, rate),
+          { chat_id: chatId, message_id: progressNotification.message_id }
         ).catch(() => {});
       });
     }, 3000);
