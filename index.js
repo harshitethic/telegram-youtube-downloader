@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import 'dotenv/config';
+import { reserveDownload } from './lib/download-slot.js';
 
 const PORT = Number(process.env.PORT) || 3948;
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.B;
@@ -69,11 +70,10 @@ function formatBytes(bytes) {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
 
-async function downloadVideo(chatId, input) {
+async function downloadVideo(chatId, input, slot) {
   let tempPath;
   let progressInterval;
   let nodeStream;
-  let cancelled = false;
 
   try {
     const videoId = extractVideoId(input);
@@ -81,12 +81,14 @@ async function downloadVideo(chatId, input) {
 
     const yt = await getYouTube();
     const info = await yt.getBasicInfo(videoId);
+    if (slot.cancelled) throw new Error('Download cancelled by user.');
     const title = info.basic_info?.title || 'video';
     const duration = Number(info.basic_info?.duration || 0);
     tempPath = path.join(DOWNLOAD_DIR, `${safeTitle(title)}-${crypto.randomUUID()}.mp4`);
 
     const progressMessage = await bot.sendMessage(chatId, `🎬 *${title}*\nStarting download…`, { parse_mode: 'Markdown' });
 
+    if (slot.cancelled) throw new Error('Download cancelled by user.');
     const webStream = await yt.download(videoId, {
       type: 'video+audio',
       quality: 'best',
@@ -95,12 +97,8 @@ async function downloadVideo(chatId, input) {
     });
 
     nodeStream = Readable.fromWeb(webStream);
-    downloads.set(chatId, {
-      cancel: () => {
-        cancelled = true;
-        nodeStream?.destroy(new Error('Download cancelled by user.'));
-      },
-    });
+    slot.attach(nodeStream);
+    if (slot.cancelled) throw new Error('Download cancelled by user.');
 
     const startedAt = Date.now();
     progressInterval = setInterval(() => {
@@ -129,10 +127,10 @@ async function downloadVideo(chatId, input) {
     });
   } catch (error) {
     console.error('Download failed:', error.message);
-    await bot.sendMessage(chatId, cancelled ? '🛑 Download cancelled.' : `❌ ${error.message || 'Download failed.'}`).catch(() => {});
+    await bot.sendMessage(chatId, slot.cancelled ? '🛑 Download cancelled.' : `❌ ${error.message || 'Download failed.'}`).catch(() => {});
   } finally {
     if (progressInterval) clearInterval(progressInterval);
-    downloads.delete(chatId);
+    if (downloads.get(chatId) === slot) downloads.delete(chatId);
     if (nodeStream && !nodeStream.destroyed) nodeStream.destroy();
     if (tempPath) await fs.promises.unlink(tempPath).catch(() => {});
   }
@@ -149,7 +147,9 @@ bot.onText(/^\/yt(?:@\w+)?(?:\s+(.+))?$/i, async (msg, match) => {
     await bot.sendMessage(chatId, '⏳ You already have a download in progress. Use /cancel to stop it.');
     return;
   }
-  await downloadVideo(chatId, url);
+  const slot = reserveDownload(downloads, chatId);
+  if (!slot) return;
+  await downloadVideo(chatId, url, slot);
 });
 
 bot.onText(/^\/cancel(?:@\w+)?$/i, async (msg) => {
