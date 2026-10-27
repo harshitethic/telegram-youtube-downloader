@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import 'dotenv/config';
+import { extractVideoId } from './lib/youtube-url.js';
 
 const PORT = Number(process.env.PORT) || 3948;
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.B;
@@ -34,19 +35,6 @@ async function getYouTube() {
     });
   }
   return youtube;
-}
-
-function extractVideoId(input) {
-  try {
-    const url = new URL(input);
-    if (url.hostname === 'youtu.be') return url.pathname.slice(1).split('/')[0] || null;
-    if (url.hostname.endsWith('youtube.com')) {
-      if (url.pathname === '/watch') return url.searchParams.get('v');
-      const match = url.pathname.match(/^\/(shorts|embed|live)\/([^/?]+)/);
-      if (match) return match[2];
-    }
-  } catch {}
-  return null;
 }
 
 function safeTitle(title) {
