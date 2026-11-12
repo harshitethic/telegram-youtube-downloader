@@ -12,11 +12,11 @@ A Telegram bot built with Node.js that downloads YouTube videos and sends them d
 - 🧹 Automatic temporary-file cleanup
 - 🛡️ YouTube URL validation for watch, shorts, live, embed, and short links
 - 📦 MP4 video + audio downloads through `youtubei.js`
-- 🚫 Prevents concurrent downloads in the same chat
+- 🚫 Reserves each chat immediately to prevent concurrent downloads during metadata lookup
 - ❤️ `/health` endpoint for deployment monitoring
 - ⚙️ Configurable port, download directory, and file-size limit
 - 🤖 Supports Telegram bot usernames in commands, such as `/yt@YourBot`
-- 🧪 GitHub Actions CI checks JavaScript syntax on pushes and pull requests
+- 🧪 GitHub Actions CI checks JavaScript syntax and unit tests on pushes and pull requests
 
 ## 🧰 Tech Stack
 
@@ -109,7 +109,13 @@ Syntax check:
 npm run check
 ```
 
-CI runs the same check automatically on pushes and pull requests.
+Run the network-free unit tests:
+
+```bash
+npm test
+```
+
+CI runs both commands automatically on pushes and pull requests.
 
 ## 🗺️ Roadmap
 
@@ -136,7 +142,8 @@ CI runs the same check automatically on pushes and pull requests.
 ### v3.0 — Production
 
 - [x] GitHub Actions CI
-- [ ] Automated unit/integration tests
+- [x] Network-free unit tests for URL validation and download state
+- [ ] End-to-end Telegram/YouTube integration tests
 - [ ] Docker image
 - [ ] Structured logging
 - [ ] Persistent job queue

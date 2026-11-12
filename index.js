@@ -8,6 +8,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import 'dotenv/config';
 import { extractVideoId } from './video-url.js';
+import { reserveDownload, releaseDownload } from './download-state.js';
 
 const PORT = Number(process.env.PORT) || 3948;
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.B;
@@ -57,23 +58,27 @@ function formatBytes(bytes) {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
 
-async function downloadVideo(chatId, input) {
+async function downloadVideo(chatId, input, active) {
   let tempPath;
   let progressInterval;
   let nodeStream;
-  let cancelled = false;
 
   try {
     const videoId = extractVideoId(input);
     if (!videoId) throw new Error('Invalid YouTube URL.');
 
+    active.ensureActive();
+
     const yt = await getYouTube();
+    active.ensureActive();
     const info = await yt.getBasicInfo(videoId);
+    active.ensureActive();
     const title = info.basic_info?.title || 'video';
     const duration = Number(info.basic_info?.duration || 0);
     tempPath = path.join(DOWNLOAD_DIR, `${safeTitle(title)}-${crypto.randomUUID()}.mp4`);
 
     const progressMessage = await bot.sendMessage(chatId, `🎬 *${title}*\nStarting download…`, { parse_mode: 'Markdown' });
+    active.ensureActive();
 
     const webStream = await yt.download(videoId, {
       type: 'video+audio',
@@ -83,12 +88,8 @@ async function downloadVideo(chatId, input) {
     });
 
     nodeStream = Readable.fromWeb(webStream);
-    downloads.set(chatId, {
-      cancel: () => {
-        cancelled = true;
-        nodeStream?.destroy(new Error('Download cancelled by user.'));
-      },
-    });
+    active.bindStream(nodeStream);
+    active.ensureActive();
 
     const startedAt = Date.now();
     progressInterval = setInterval(() => {
@@ -110,6 +111,7 @@ async function downloadVideo(chatId, input) {
       throw new Error(`File is larger than the configured ${MAX_FILE_SIZE_MB} MB limit.`);
     }
 
+    active.ensureActive();
     await bot.sendVideo(chatId, tempPath, {
       caption: `✅ ${title}`,
       duration: duration || undefined,
@@ -117,10 +119,10 @@ async function downloadVideo(chatId, input) {
     });
   } catch (error) {
     console.error('Download failed:', error.message);
-    await bot.sendMessage(chatId, cancelled ? '🛑 Download cancelled.' : `❌ ${error.message || 'Download failed.'}`).catch(() => {});
+    await bot.sendMessage(chatId, active.cancelled ? '🛑 Download cancelled.' : `❌ ${error.message || 'Download failed.'}`).catch(() => {});
   } finally {
     if (progressInterval) clearInterval(progressInterval);
-    downloads.delete(chatId);
+    releaseDownload(downloads, chatId, active);
     if (nodeStream && !nodeStream.destroyed) nodeStream.destroy();
     if (tempPath) await fs.promises.unlink(tempPath).catch(() => {});
   }
@@ -133,11 +135,12 @@ bot.onText(/^\/yt(?:@\w+)?(?:\s+(.+))?$/i, async (msg, match) => {
     await bot.sendMessage(chatId, '❌ Invalid YouTube URL. Usage: /yt <youtube link>');
     return;
   }
-  if (downloads.has(chatId)) {
+  const active = reserveDownload(downloads, chatId);
+  if (!active) {
     await bot.sendMessage(chatId, '⏳ You already have a download in progress. Use /cancel to stop it.');
     return;
   }
-  await downloadVideo(chatId, url);
+  await downloadVideo(chatId, url, active);
 });
 
 bot.onText(/^\/cancel(?:@\w+)?$/i, async (msg) => {
