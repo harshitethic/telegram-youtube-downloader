@@ -6,7 +6,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "check": "node --check index.js"
+    "check": "node --check index.js && node --check video-url.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"
