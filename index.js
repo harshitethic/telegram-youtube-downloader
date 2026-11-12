@@ -10,6 +10,7 @@ import 'dotenv/config';
 import { extractVideoId } from './video-url.js';
 import { reserveDownload, releaseDownload } from './download-state.js';
 import { createByteLimit } from './download-limit.js';
+import { sendDownloadStart, updateDownloadProgress } from './download-messages.js';
 
 const PORT = Number(process.env.PORT) || 3948;
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.B;
@@ -82,7 +83,7 @@ async function downloadVideo(chatId, input, active) {
     const duration = Number(info.basic_info?.duration || 0);
     tempPath = path.join(DOWNLOAD_DIR, `${safeTitle(title)}-${crypto.randomUUID()}.mp4`);
 
-    const progressMessage = await bot.sendMessage(chatId, `🎬 *${title}*\nStarting download…`, { parse_mode: 'Markdown' });
+    const progressMessage = await sendDownloadStart(bot, chatId, title);
     active.ensureActive();
 
     const webStream = await yt.download(videoId, {
@@ -102,9 +103,9 @@ async function downloadVideo(chatId, input, active) {
         if (err) return;
         const elapsed = Math.max((Date.now() - startedAt) / 1000, 1);
         const rate = stats.size / elapsed;
-        bot.editMessageText(
-          `🎬 *${title}*\n📦 ${formatBytes(stats.size)} downloaded\n⚡ ${formatBytes(rate)}/s`,
-          { chat_id: chatId, message_id: progressMessage.message_id, parse_mode: 'Markdown' }
+        updateDownloadProgress(
+          bot, chatId, progressMessage.message_id, title,
+          formatBytes(stats.size), formatBytes(rate)
         ).catch(() => {});
       });
     }, 3000);
