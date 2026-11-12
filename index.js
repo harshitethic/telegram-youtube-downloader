@@ -9,10 +9,15 @@ import { pipeline } from 'node:stream/promises';
 import 'dotenv/config';
 import { extractVideoId } from './video-url.js';
 import { reserveDownload, releaseDownload } from './download-state.js';
+import { createByteLimit } from './download-limit.js';
 
 const PORT = Number(process.env.PORT) || 3948;
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.B;
-const MAX_FILE_SIZE_MB = Number(process.env.MAX_FILE_SIZE_MB) || 49;
+const MAX_FILE_SIZE_MB = Number(process.env.MAX_FILE_SIZE_MB || 49);
+const MAX_FILE_BYTES = Math.floor(MAX_FILE_SIZE_MB * 1024 * 1024);
+if (!Number.isSafeInteger(MAX_FILE_BYTES) || MAX_FILE_BYTES < 1) {
+  throw new Error('MAX_FILE_SIZE_MB must specify a positive, finite file-size limit.');
+}
 const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || path.join(process.env.TMPDIR || process.cwd(), 'downloads');
 
 if (!TOKEN) throw new Error('Missing TELEGRAM_BOT_TOKEN environment variable.');
@@ -104,12 +109,7 @@ async function downloadVideo(chatId, input, active) {
       });
     }, 3000);
 
-    await pipeline(nodeStream, fs.createWriteStream(tempPath));
-
-    const stats = await fs.promises.stat(tempPath);
-    if (stats.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-      throw new Error(`File is larger than the configured ${MAX_FILE_SIZE_MB} MB limit.`);
-    }
+    await pipeline(nodeStream, createByteLimit(MAX_FILE_BYTES), fs.createWriteStream(tempPath));
 
     active.ensureActive();
     await bot.sendVideo(chatId, tempPath, {

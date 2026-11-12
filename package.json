@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "check": "node --check index.js && node --check video-url.js && node --check download-state.js",
+    "check": "node --check index.js && node --check video-url.js && node --check download-state.js && node --check download-limit.js",
     "test": "node --test"
   },
   "engines": {

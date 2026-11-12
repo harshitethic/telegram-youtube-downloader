@@ -64,6 +64,7 @@ Optional settings:
 export PORT="3948"
 export DOWNLOAD_DIR="./downloads"
 export MAX_FILE_SIZE_MB="49"
+# Must be a positive number; applied while downloading, not after
 ```
 
 The legacy `B` environment variable is still accepted for compatibility, but new deployments should use `TELEGRAM_BOT_TOKEN`.
@@ -122,7 +123,7 @@ CI runs both commands automatically on pushes and pull requests.
 ### v2.0 — Better Downloads
 
 - [x] Migrate from `ytdl-core` to maintained `youtubei.js`
-- [x] File-size guard before Telegram upload
+- [x] Streaming file-size guard that stops oversized downloads before filling disk
 - [x] Configurable download directory
 - [ ] Audio-only downloads (`/mp3`)
 - [ ] Quality selection (`/quality`)
