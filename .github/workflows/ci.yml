@@ -24,3 +24,6 @@ jobs:
 
       - name: Check syntax
         run: npm run check
+
+      - name: Test video URL validation
+        run: npm test
